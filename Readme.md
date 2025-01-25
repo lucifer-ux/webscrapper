@@ -30,20 +30,16 @@ Ensure you have the following installed:
 
 1. **Clone the repo**:
    ```bash
-   git clone https://github.com/your-username/your-repo-name.git
-   cd your-repo-name
+   git clone https://github.com/lucifer-ux/webscrapper.git
+   cd whatsapp-web
 Install dependencies:
 
-bash
-Copy
-Edit
 npm install
+
 Start the project:
 
-bash
-Copy
-Edit
 npm run start
+
 Scan the QR Code:
 
 Open WhatsApp on your phone.
@@ -84,7 +80,7 @@ The open-source community for inspiring and supporting this project. 🌟
 📞 Contact
 Have questions or suggestions? Feel free to reach out! 📨
 
-Made with ❤️ and ☕ by Your Name 🌈
+Made with ❤️ and ☕ lucifer-ux 😊
 
 markdown
 Copy
