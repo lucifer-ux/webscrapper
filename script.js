@@ -7,21 +7,10 @@ const mongoose = require('mongoose');
 const { MongoStore } = require('wwebjs-mongo');
 var AdmZip = require('adm-zip');
 const path = require('path');
-require('dotenv').config();
+const scrapeShoeDetails = require('./serverCode/superkicks.js');
+require('dotenv').config()
 
-const {
-  headersForData,
-  headersForName,
-} = require("./serverCode/TryingToWrite/Headers.js");
-const {
-  querryForData,
-  querryForName,
-} = require("./serverCode/TryingToWrite/querry.js");
-const {
-  extractSneakerDetails,
-} = require("./serverCode/TryingToWrite/Helper.js");
-
-const MONGODB_URI =  process.env.MONGO_URI 
+const MONGODB_URI = process.env.MONGO_URI
 
 mongoose.connect(MONGODB_URI).then(async () => {
   const store = new MongoStore({ mongoose: mongoose });
@@ -36,12 +25,12 @@ mongoose.connect(MONGODB_URI).then(async () => {
     console.log("Session not found, initializing new session...");
   }
 let client;
-
+let isWhitelisted;
   client = new Client({
     authStrategy: new RemoteAuth({
       clientId: clientId,
       store: store,
-      backupSyncIntervalMs: 300000, // Sync backup every 5 minutes
+      backupSyncIntervalMs: 300000,
     }),
   });
   
@@ -50,46 +39,6 @@ let client;
   });
   
   client.initialize();
-//   const sessionFilePath = path.join(__dirname, `${clientId}.chunks`);
-//   await store.extract({
-//     session: clientId,
-//     path: sessionFilePath
-// });
-
-  // const collectionExist = await collectionExists(clientId);
-  // console.log("boolValue", collectionExist);
-  // let client;
-
-  // if (collectionExist) {
-  //   console.log("Session found in MongoDB, loading session...");
-
-  //   // Load the existing session without re-initializing
-  //   client = new Client({
-  //     authStrategy: new RemoteAuth({
-  //       clientId: clientId,
-  //       store: store,
-  //       backupSyncIntervalMs: 300000,
-  //     }),
-  //   });
-  //   client.initialize();
-  // } else {
-  //   console.log("Session not found, initializing new session...");
-
-  //   // Create and store a new session
-  //   client = new Client({
-  //     authStrategy: new RemoteAuth({
-  //       clientId: clientId,
-  //       store: store,
-  //       backupSyncIntervalMs: 300000,
-  //     }),
-  //   });
-
-  //   client.on("remote_session_saved", () => {
-  //     console.log("New remote session saved to MongoDB");
-  //   });
-
-  //   client.initialize(); // Only initialize if the session is new
-  // }
 
   client.once("ready", async () => {
     console.log("Client is ready!");
@@ -99,8 +48,8 @@ let client;
     const final_number = `91${sanitized_number.substring(
       sanitized_number.length - 10
     )}`;
-    const whitelist = ["0987654321", "918707853820", "916392212826", "919348456270"];
-    const isWhitelisted = (number) => whitelist.includes(number.split("@")[0]);
+    const whitelist = process.env.MOBILE_NUMBER_ARRAY;
+    isWhitelisted = (number) => whitelist.includes(number.split("@")[0]);
 
     const number_details = await client.getNumberId(final_number); 
 
@@ -112,7 +61,7 @@ let client;
   });
 
   client.on("qr", (qr) => {
-    if (!sessionExists) { // Only show QR code if session does not exist
+    if (!sessionExists) {
       qrcode.generate(qr, { small: true });
       console.log("QR RECEIVED", qr);
     }
@@ -130,17 +79,21 @@ let client;
     console.log(message.from, "message.from");
     const senderNumber = message.from.split("@")[0];
     const numberDetails = await client.getNumberId(message.from);
-    // if (isWhitelisted(senderNumber)) {
-      // console.log(
-      //   `Message from whitelisted number ${senderNumber}: ${message.body}`
-      // );
 
-      if (message.body === "hi" || message.body === "Hi") {
-        message.reply(
-          `hey ${message.notifyName}, can you send me the shoe you want?`
-        );
-      } else {
-        const responseValue = await fetchFunction(message.body);
+    if (!isWhitelisted(senderNumber)) {
+      console.log(`Number ${senderNumber} is not whitelisted.`);
+      return;
+    }
+
+       if (message.body.toLowerCase() === "hi") {
+    await message.reply(
+      `Hey ${message.notifyName}, can you send me the shoe you want?`
+    );
+    return;
+  }
+  try {
+
+    const responseValue = await shoeDetailsSuperKick(message.body);
         if (responseValue === "__failed") {
           await client.sendMessage(
             numberDetails._serialized,
@@ -148,18 +101,14 @@ let client;
           );
         } else {
           console.log(
-            responseValue.responseForShoes?.data?.data?.product?.market,
+            responseValue,
             "responseValue"
           );
-          const product = responseValue.responseForExtraData?.data?.data?.product;
-          const smallImageUrl = product?.media?.smallImageUrl;
-          const title = product?.primaryTitle;
-          const salesInformation =
-            responseValue.responseForShoes?.data?.data?.product?.market
-              ?.salesInformation;
-          console.log(salesInformation?.pricePremium);
-          console.log(product?.media?.smallImageUrl, "responseValue");
+          const smallImageUrl = responseValue[0]?.image;
+          const buyUrl = responseValue[0]?.url;
+          const title = responseValue[0]?.name;
           const media = await MessageMedia.fromUrl(smallImageUrl);
+          const price = responseValue[0]?.price;
           await client.sendMessage(message.from, media);
           await client.sendMessage(
             numberDetails._serialized,
@@ -171,74 +120,27 @@ let client;
           );
           await client.sendMessage(
             numberDetails._serialized,
-            "Price Premium " + salesInformation?.pricePremium
+            "Price" + price
           );
           await client.sendMessage(
             numberDetails._serialized,
-            "Volatility " + salesInformation?.volatility
+            "Buy from" + buyUrl
           );
-          await client.sendMessage(
-            numberDetails._serialized,
-            "Description " + product?.description
-          );
-          await client.sendMessage(
-            numberDetails._serialized,
-            "Style " + product?.traits[0]?.value
-          );
-          await client.sendMessage(
-            numberDetails._serialized,
-            "Colorway " + product?.traits[1]?.value
-          );
-          await client.sendMessage(
-            numberDetails._serialized,
-            "Retail Price " + "$ " + product?.traits[2]?.value 
-          );
+          
         }
-      }
+
+  }
+  catch(e)
+  {
+    console.log(e);
+  }
+              
     // }
   });
 });
 
-const fetchFunction = async (name) => {
-  try {
-    console.log(`Fetching data for name: ${name}`); 
-    const response = await axios.post(
-      `http://localhost:3000/api/fetch-name?name=${name}`
-    );
-    console.log(extractSneakerDetails(response), "tessttinggg")
-    if (extractSneakerDetails(response)) {
-      const extractedValues = extractSneakerDetails(response);
-      const responseForShoes = await axios.post(
-        `http://localhost:3000/api/fetch-data?pid=${extractedValues?.urlKey}`
-      );
-      const responseForExtraData = await axios.post(
-        `http://localhost:3000/api/fetch-extra-data?pid=${extractedValues?.urlKey}`
-      );
-      console.log(
-        "Response from server:",
-        responseForShoes?.data?.data?.product?.market?.salesInformation
-      );
-      console.log(
-        "reeesspponnseee",
-        responseForExtraData?.data?.data?.product?.media?.smallImageUrl
-      );
-      return { responseForShoes, responseForExtraData };
-    } else {
-      console.log("value not found");
-      return "__failed";
-    }
-  } catch (error) {
-    console.error("Error fetching name data:", error);
-    throw error;
-  }
-};
-
-// async function collectionExists(clientId) {
-//   const collectionName = `whatsapp-RemoteAuth-${clientId}.files`;
-  
-//   const collections = await mongoose.connection.db.listCollections().toArray();
-
-//   const collection = collections.find(c => c.name === collectionName);
-  
-//   return collection;
-// }
+const shoeDetailsSuperKick = async (shoeName) => {
+response = await scrapeShoeDetails(shoeName);
+console.log(response);
+return (response === []) ? "__failed" : response;
+}
