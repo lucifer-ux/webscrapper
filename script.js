@@ -63,7 +63,7 @@ mongoose.connect(MONGODB_URI).then(async () => {
   client.once("ready", async () => {
     console.log("Client is ready!");
 
-    const number = "6392212826";
+    const number = process.env.FROM_MOBILE_NUMBER;
     const sanitized_number = number.toString().replace(/[- )(]/g, "");
     const final_number = `91${sanitized_number.substring(
       sanitized_number.length - 10
