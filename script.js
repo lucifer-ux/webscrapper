@@ -162,7 +162,11 @@ mongoose.connect(MONGODB_URI).then(async () => {
             );
             await client.sendMessage(
               numberDetails._serialized,
-              "Buy from" + " " + buyUrl
+              "Buy from " + " "
+            );
+            await client.sendMessage(
+              numberDetails._serialized,
+              buyUrl
             );
           }
         }
